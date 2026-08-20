@@ -113,7 +113,7 @@ app.get('/api/user/profile', authenticateToken, async (req, res) => {
     }
 });
 
-// 4. VALIDER LA VISIONNAGE D'UNE PUBLICITE (+0,003 $)
+// 4. VALIDER LE VISIONNAGE D'UNE PUBLICITE (+0,003 $)
 app.post('/api/watch-ad', authenticateToken, async (req, res) => {
     try {
         const today = new Date().toISOString().split('T')[0];
