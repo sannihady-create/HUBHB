@@ -14,7 +14,6 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// INITIALISATION AUTOMATIQUE DE LA BASE DE DONNÉES ET CRÉATION DES PUBS
 async function initDatabase() {
   try {
     // 1. Table Utilisateurs
@@ -36,18 +35,6 @@ async function initDatabase() {
         reward_amount NUMERIC NOT NULL
       );
     `);
-
-    // Force l'insertion des 50 pubs si la table est vide
-    const adsCount = await pool.query('SELECT COUNT(*) FROM ads');
-    if (parseInt(adsCount.rows[0].count) === 0) {
-      for (let i = 1; i <= 50; i++) {
-        await pool.query(
-          'INSERT INTO ads (title, reward_amount) VALUES ($1, $2)',
-          [`Publicité Sponsorisée #${i}`, 25.00]
-        );
-      }
-      console.log('50 publicités insérées avec succès !');
-    }
 
     // 3. Table Vues de Pubs
     await pool.query(`
@@ -73,9 +60,21 @@ async function initDatabase() {
       );
     `);
 
-    console.log('Base de données initialisée avec succès !');
+    // RÉINITIALISATION DES 1000 PUBS À 2 FCFA
+    const countCheck = await pool.query('SELECT COUNT(*) FROM ads');
+    if (parseInt(countCheck.rows[0].count) !== 1000) {
+      await pool.query('TRUNCATE TABLE ad_views, ads CASCADE;');
+      for (let i = 1; i <= 1000; i++) {
+        await pool.query(
+          'INSERT INTO ads (title, reward_amount) VALUES ($1, $2)',
+          [`Sponsor Alibaba #${i}`, 2.00]
+        );
+      }
+      console.log('1000 publicités de 2 FCFA prêtes !');
+    }
+
   } catch (err) {
-    console.error("Erreur initialisation DB :", err);
+    console.error("Erreur DB :", err);
   }
 }
 
@@ -101,10 +100,7 @@ app.get('/', (req, res) => {
 // INSCRIPTION
 app.post('/api/register', async (req, res) => {
   const { username, email, password } = req.body;
-  
-  if (!username || !email || !password) {
-    return res.status(400).json({ error: 'Veuillez remplir tous les champs.' });
-  }
+  if (!username || !email || !password) return res.status(400).json({ error: 'Remplissez tous les champs.' });
 
   try {
     const cleanUsername = username.trim();
@@ -117,54 +113,32 @@ app.post('/api/register', async (req, res) => {
     );
     res.json({ message: 'Compte créé avec succès !', user: newUser.rows[0] });
   } catch (err) {
-    console.error("Erreur inscription :", err);
-    if (err.code === "23505") {
-      return res.status(400).json({ error: "Email ou nom d'utilisateur déjà utilisé." });
-    }
-    res.status(500).json({ error: "Erreur serveur." });
+    res.status(500).json({ error: "Erreur lors de l'inscription." });
   }
 });
 
 // CONNEXION
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
-
-  if (!email || !password) {
-    return res.status(400).json({ error: "Veuillez remplir l'email et le mot de passe." });
-  }
+  if (!email || !password) return res.status(400).json({ error: "Champs manquants." });
 
   try {
     const cleanEmail = email.trim().toLowerCase();
-
     const result = await pool.query('SELECT * FROM users WHERE LOWER(email) = $1', [cleanEmail]);
-    if (result.rows.length === 0) {
-      return res.status(400).json({ error: 'Email ou mot de passe incorrect.' });
-    }
+    if (result.rows.length === 0) return res.status(400).json({ error: 'Identifiants incorrects.' });
 
     const user = result.rows[0];
     const validPassword = await bcrypt.compare(password, user.password_hash);
-    if (!validPassword) {
-      return res.status(400).json({ error: 'Email ou mot de passe incorrect.' });
-    }
+    if (!validPassword) return res.status(400).json({ error: 'Identifiants incorrects.' });
 
-    const token = jwt.sign(
-      { id: user.id, username: user.username },
-      JWT_SECRET,
-      { expiresIn: '24h' }
-    );
-
-    res.json({
-      message: 'Connexion réussie !',
-      token,
-      user: { id: user.id, username: user.username, balance: user.balance }
-    });
+    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '24h' });
+    res.json({ token, user: { id: user.id, username: user.username, balance: user.balance } });
   } catch (err) {
-    console.error("Erreur connexion :", err);
     res.status(500).json({ error: "Erreur serveur." });
   }
 });
 
-// ROUTE RÉCUPÉRATION DES PUBLICITÉS
+// LISTE DES PUBS (SANS RESTRICTION DE TEMPS)
 app.get('/api/ads', authenticateToken, async (req, res) => {
   const userId = req.user.id;
   try {
@@ -174,15 +148,13 @@ app.get('/api/ads', authenticateToken, async (req, res) => {
       FROM ads a
       LEFT JOIN ad_views v 
         ON a.id = v.ad_id 
-        AND v.user_id = $1 
-        AND v.viewed_at > NOW() - INTERVAL '24 hours'
+        AND v.user_id = $1
       GROUP BY a.id
       ORDER BY a.id ASC
     `;
     const ads = await pool.query(adsQuery, [userId]);
     res.json(ads.rows);
   } catch (err) {
-    console.error("Erreur chargement pubs:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -192,67 +164,26 @@ app.post('/api/watch-ad', authenticateToken, async (req, res) => {
   const { adId } = req.body;
   const userId = req.user.id;
   try {
-    const recentViews = await pool.query(
-      "SELECT id FROM ad_views WHERE user_id = $1 AND ad_id = $2 AND viewed_at > NOW() - INTERVAL '24 hours'",
+    const alreadyWatched = await pool.query(
+      "SELECT id FROM ad_views WHERE user_id = $1 AND ad_id = $2",
       [userId, adId]
     );
 
-    if (recentViews.rows.length > 0) {
-      return res.status(400).json({ error: 'Vous avez déjà regardé cette publicité aujourd\'hui.' });
+    if (alreadyWatched.rows.length > 0) {
+      return res.status(400).json({ error: 'Vous avez déjà regardé cette publicité.' });
     }
 
     const adQuery = await pool.query('SELECT reward_amount FROM ads WHERE id = $1', [adId]);
-    if (adQuery.rows.length === 0) {
-      return res.status(404).json({ error: 'Publicité introuvable' });
-    }
-
     const reward = parseFloat(adQuery.rows[0].reward_amount);
 
-    await pool.query(
-      'INSERT INTO ad_views (user_id, ad_id, reward_claimed) VALUES ($1, $2, $3)',
-      [userId, adId, reward]
-    );
+    await pool.query('INSERT INTO ad_views (user_id, ad_id, reward_claimed) VALUES ($1, $2, $3)', [userId, adId, reward]);
     await pool.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [reward, userId]);
 
     res.json({ message: 'Gain crédité !', reward });
   } catch (err) {
-    console.error("Erreur watch-ad :", err);
     res.status(500).json({ error: err.message });
   }
 });
 
-// DEMANDE DE RETRAIT EN FCFA
-app.post('/api/withdraw', authenticateToken, async (req, res) => {
-  const { amount, paymentMethod, accountDetails } = req.body;
-  const userId = req.user.id;
-  const minWithdrawal = 500; // 500 FCFA minimum
-
-  if (!amount || amount < minWithdrawal) {
-    return res.status(400).json({ error: `Le montant minimum de retrait est de ${minWithdrawal} FCFA.` });
-  }
-
-  try {
-    const userQuery = await pool.query('SELECT balance FROM users WHERE id = $1', [userId]);
-    const currentBalance = parseFloat(userQuery.rows[0].balance);
-
-    if (currentBalance < amount) {
-      return res.status(400).json({ error: 'Solde insuffisant pour effectuer ce retrait.' });
-    }
-
-    await pool.query('UPDATE users SET balance = balance - $1 WHERE id = $2', [amount, userId]);
-    await pool.query(
-      'INSERT INTO withdrawals (user_id, amount, payment_method, account_details) VALUES ($1, $2, $3, $4)',
-      [userId, amount, paymentMethod, accountDetails]
-    );
-
-    res.json({ message: 'Demande de retrait enregistrée avec succès !' });
-  } catch (err) {
-    console.error("Erreur retrait :", err);
-    res.status(500).json({ error: "Une erreur est survenue lors de la demande." });
-  }
-});
-
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Serveur HUBHB démarré sur le port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Serveur actif sur le port ${PORT}`));
