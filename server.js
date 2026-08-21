@@ -28,6 +28,15 @@ async function initDatabase() {
       );
     `);
 
+    //  2. Table Publicités
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ads (
+        id SERIAL PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        reward_amount NUMERIC NOT NULL
+      );
+    `);
+
     // 2. Table Publicités
     await pool.query(`
       CREATE TABLE IF NOT EXISTS ads (
@@ -37,16 +46,16 @@ async function initDatabase() {
       );
     `);
 
-    // 3. Table Vues de Pubs
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS ad_views (
-        id SERIAL PRIMARY KEY,
-        user_id INT REFERENCES users(id),
-        ad_id INT REFERENCES ads(id),
-        reward_claimed NUMERIC,
-        viewed_at TIMESTAMP DEFAULT NOW()
-      );
-    `);
+    // Force l'insertion des 50 pubs si la table est vide
+    const adsCount = await pool.query('SELECT COUNT(*) FROM ads');
+    if (parseInt(adsCount.rows[0].count) === 0) {
+      for (let i = 1; i <= 50; i++) {
+        await pool.query(
+          'INSERT INTO ads (title, reward_amount) VALUES ($1, $2)',
+          [`Publicité Sponsorisée #${i}`, 25.00]
+        );
+      }
+    }
 
     // 4. Table Retraits
     await pool.query(`
