@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HUBHB - Gagner de l'argent en regardant des pubs</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; }
+    h1 { color: #333; }
+    .ad-card { background: white; padding: 15px; margin-bottom: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    button { background-color: #28a745; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; }
+    button:hover { background-color: #218838; }
+  </style>
+</head>
+<body>
+
+  <h1>Publicités disponibles</h1>
+  <div id="ads-container">Chargement des publicités...</div>
+
+  <script>
+    async function fetchAds() {
+      try {
+        const response = await fetch('/api/ads');
+        const ads = await response.json();
+        
+        const container = document.getElementById('ads-container');
+        container.innerHTML = '';
+
+        if (!ads || ads.length === 0) {
+          container.innerHTML = '<p>Aucune publicité disponible pour le moment.</p>';
+          return;
+        }
+
+        ads.forEach(ad => {
+          const adElement = document.createElement('div');
+          adElement.className = 'ad-card';
+          adElement.innerHTML = `
+            <h3>${ad.title}</h3>
+            <p>Gain : <strong>${ad.reward_amount} $</strong> | Durée : ${ad.duration_seconds} sec</p>
+            <button onclick="watchAd('${ad.ad_url}')">Regarder l'annonce</button>
+          `;
+          container.appendChild(adElement);
+        });
+      } catch (err) {
+        document.getElementById('ads-container').innerHTML = 'Erreur lors du chargement des annonces.';
+      }
+    }
+
+    function watchAd(adUrl) {
+      window.open(adUrl, '_blank');
+    }
+
+    fetchAds();
+  </script>
+</body>
+</html>
