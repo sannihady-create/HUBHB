@@ -5,53 +5,62 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HUBHB PTC</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; }
-    .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
-    .header { display: flex; justify-content: space-between; align-items: center; }
-    .balance-box { font-size: 1.2rem; font-weight: bold; color: #28a745; }
-    input { display: block; width: 90%; margin: 10px 0; padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
-    button { background-color: #28a745; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; }
-    button:disabled { background-color: #ccc; }
+    body { font-family: Arial, sans-serif; background: #f4f6f9; margin: 0; padding: 20px; }
+    .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    h1 { margin-top: 0; }
     .hidden { display: none; }
+    .card { border: 1px solid #ddd; padding: 15px; border-radius: 5px; margin-bottom: 10px; }
+    button { background: #28a745; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    .auth-box { max-width: 400px; margin: auto; }
+    input { width: 100%; padding: 10px; margin: 8px 0; box-sizing: border-box; }
   </style>
 </head>
 <body>
 
-  <!-- Section Authentification -->
-  <div id="auth-section" class="card">
-    <h2>Connexion / Inscription</h2>
-    <input type="text" id="auth-username" placeholder="Nom d'utilisateur (pour l'inscription)">
-    <input type="email" id="auth-email" placeholder="Email">
-    <input type="password" id="auth-password" placeholder="Mot de passe">
-    <button onclick="login()">Se connecter</button>
-    <button onclick="register()" style="background-color: #007bff;">S'inscrire</button>
-  </div>
-
-  <!-- Section Dashboard -->
-  <div id="dashboard" class="hidden">
-    <div class="header card">
-      <h1>HUBHB PTC</h1>
-      <div>
-        <p>Bienvenue, <strong id="user-name"></strong> !</p>
-        <div class="balance-box">Solde : <span id="user-balance">0.0000</span> $</div>
-        <button onclick="logout()" style="background-color: #dc3545; margin-top: 5px;">Déconnexion</button>
-      </div>
+  <div class="container">
+    <div id="auth-section" class="auth-box">
+      <h2>Connexion / Inscription</h2>
+      <input type="text" id="auth-username" placeholder="Nom d'utilisateur (pour inscription)">
+      <input type="email" id="auth-email" placeholder="Email">
+      <input type="password" id="auth-password" placeholder="Mot de passe">
+      <button onclick="login()">Se connecter</button>
+      <button onclick="register()" style="background:#007bff;">S'inscrire</button>
     </div>
 
-    <h2>Publicités disponibles</h2>
-    <div id="ads-container">Chargement des publicités...</div>
+    <div id="dashboard" class="hidden">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h1>HUBHB PTC</h1>
+        <div>
+          <span>Bienvenue, <b id="user-name"></b> !</span><br>
+          <span style="color: green; font-weight: bold;">Solde : <span id="user-balance">0.0000</span> $</span><br>
+          <button onclick="logout()" style="background:#dc3545; padding: 5px 10px; margin-top: 5px;">Deconnexion</button>
+        </div>
+      </div>
+      <hr>
+      <h2>Publicités disponibles</h2>
+      <div id="ads-list"></div>
+    </div>
   </div>
 
   <script>
-    let currentUser = JSON.parse(localStorage.getItem('user')) || null;
+    let token = localStorage.getItem('token') || null;
 
-    function updateUI() {
-      if (currentUser) {
-        document.getElementById('auth-section').classList.add('hidden');
-        document.getElementById('dashboard').classList.remove('hidden');
-        document.getElementById('user-name').innerText = currentUser.username;
-        fetchUserBalance();
-        fetchAds();
+    async function updateUI() {
+      if (token) {
+        const res = await fetch('/api/me', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const user = await res.json();
+          document.getElementById('auth-section').classList.add('hidden');
+          document.getElementById('dashboard').classList.remove('hidden');
+          document.getElementById('user-name').innerText = user.username;
+          document.getElementById('user-balance').innerText = parseFloat(user.balance).toFixed(4);
+          fetchAds();
+        } else {
+          logout();
+        }
       } else {
         document.getElementById('auth-section').classList.remove('hidden');
         document.getElementById('dashboard').classList.add('hidden');
@@ -70,7 +79,7 @@
       });
       const data = await res.json();
       if (res.ok) {
-        alert("Compte créé ! Connectez-vous.");
+        alert("Compte crée avec succès ! Connecte-toi.");
       } else {
         alert(data.error);
       }
@@ -87,8 +96,8 @@
       });
       const data = await res.json();
       if (res.ok) {
-        currentUser = data.user;
-        localStorage.setItem('user', JSON.stringify(currentUser));
+        token = data.token;
+        localStorage.setItem('token', token);
         updateUI();
       } else {
         alert(data.error);
@@ -96,35 +105,26 @@
     }
 
     function logout() {
-      localStorage.removeItem('user');
-      currentUser = null;
+      localStorage.removeItem('token');
+      token = null;
       updateUI();
     }
 
-    async function fetchUserBalance() {
-      if (!currentUser) return;
-      const res = await fetch(`/api/user/${currentUser.id}`);
-      const data = await res.json();
-      if (data.balance !== undefined) {
-        document.getElementById('user-balance').innerText = parseFloat(data.balance).toFixed(4);
-      }
-    }
-
     async function fetchAds() {
-      const response = await fetch('/api/ads');
-      const ads = await response.json();
-      const container = document.getElementById('ads-container');
-      container.innerHTML = '';
+      const res = await fetch('/api/ads');
+      const ads = await res.json();
+      const adsList = document.getElementById('ads-list');
+      adsList.innerHTML = '';
 
       ads.forEach(ad => {
-        const adElement = document.createElement('div');
-        adElement.className = 'card';
-        adElement.innerHTML = `
+        const div = document.createElement('div');
+        div.className = 'card';
+        div.innerHTML = `
           <h3>${ad.title}</h3>
-          <p>Gain : <strong>${ad.reward_amount} $</strong> | Durée : ${ad.duration_seconds} sec</p>
-          <button id="btn-${ad.id}" onclick="watchAd('${ad.id}', '${ad.ad_url}', ${ad.duration_seconds})">Regarder l'annonce</button>
+          <p>Gain : <b>${parseFloat(ad.reward_amount).toFixed(4)} $</b> | Durée : ${ad.duration_seconds} sec</p>
+          <button id="btn-${ad.id}" onclick="watchAd(${ad.id}, '${ad.ad_url}', ${ad.duration_seconds})">Regarder l'annonce</button>
         `;
-        container.appendChild(adElement);
+        adsList.appendChild(div);
       });
     }
 
@@ -142,12 +142,15 @@
           btn.innerText = "Validation...";
           const res = await fetch('/api/watch-ad', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: currentUser.id, adId })
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ adId })
           });
           if (res.ok) {
             btn.innerText = "Gain crédité ! ✅";
-            fetchUserBalance();
+            updateUI();
           } else {
             btn.innerText = "Erreur";
           }
