@@ -48,22 +48,22 @@ async function initDatabase() {
       );
     `);
 
-    // 4. Vérifier si les 50 pubs existent déjà, sinon les créer
-    const adsCheck = await pool.query('SELECT COUNT(*) FROM ads');
-    if (parseInt(adsCheck.rows[0].count) < 50) {
-      await pool.query('DELETE FROM ad_views');
-      await pool.query('DELETE FROM ads');
-      
-      for (let i = 1; i <= 50; i++) {
-        await pool.query(
-          'INSERT INTO ads (title, reward_amount) VALUES ($1, $2)',
-          [`Publicité Sponsorisée #${i}`, 25.00]
-        );
-      }
-      console.log('50 publicités créées avec succès !');
-    }
+    // 4. Table Retraits
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS withdrawals (
+        id SERIAL PRIMARY KEY,
+        user_id INT REFERENCES users(id),
+        amount NUMERIC NOT NULL,
+        payment_method VARCHAR(50),
+        account_details VARCHAR(255),
+        status VARCHAR(50) DEFAULT 'En attente',
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
+    console.log('Base de données initialisée avec succès !');
   } catch (err) {
-    console.error("Erreur lors de l'initialisation DB :", err);
+    console.error("Erreur initialisation DB :", err);
   }
 }
 
@@ -152,10 +152,21 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// LISTE DES PUBS (Limite 50 par jour)
+// ROUTE 50 PUBLICITÉS EN FCFA
 app.get('/api/ads', authenticateToken, async (req, res) => {
   const userId = req.user.id;
   try {
+    // Génération automatique si aucune pub n'existe
+    const countCheck = await pool.query('SELECT COUNT(*) FROM ads');
+    if (parseInt(countCheck.rows[0].count) === 0) {
+      for (let i = 1; i <= 50; i++) {
+        await pool.query(
+          'INSERT INTO ads (title, reward_amount) VALUES ($1, $2)',
+          [`Publicité Sponsorisée #${i}`, 25.00]
+        );
+      }
+    }
+
     const adsQuery = `
       SELECT a.*, 
         CASE WHEN COUNT(v.id) > 0 THEN true ELSE false END AS watched
@@ -170,6 +181,7 @@ app.get('/api/ads', authenticateToken, async (req, res) => {
     const ads = await pool.query(adsQuery, [userId]);
     res.json(ads.rows);
   } catch (err) {
+    console.error("Erreur chargement pubs:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -193,7 +205,7 @@ app.post('/api/watch-ad', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Publicité introuvable' });
     }
 
-    const reward = adQuery.rows[0].reward_amount;
+    const reward = parseFloat(adQuery.rows[0].reward_amount);
 
     await pool.query(
       'INSERT INTO ad_views (user_id, ad_id, reward_claimed) VALUES ($1, $2, $3)',
@@ -208,7 +220,38 @@ app.post('/api/watch-ad', authenticateToken, async (req, res) => {
   }
 });
 
+// DEMANDE DE RETRAIT EN FCFA
+app.post('/api/withdraw', authenticateToken, async (req, res) => {
+  const { amount, paymentMethod, accountDetails } = req.body;
+  const userId = req.user.id;
+  const minWithdrawal = 500; // 500 FCFA minimum
+
+  if (!amount || amount < minWithdrawal) {
+    return res.status(400).json({ error: `Le montant minimum de retrait est de ${minWithdrawal} FCFA.` });
+  }
+
+  try {
+    const userQuery = await pool.query('SELECT balance FROM users WHERE id = $1', [userId]);
+    const currentBalance = parseFloat(userQuery.rows[0].balance);
+
+    if (currentBalance < amount) {
+      return res.status(400).json({ error: 'Solde insuffisant pour effectuer ce retrait.' });
+    }
+
+    await pool.query('UPDATE users SET balance = balance - $1 WHERE id = $2', [amount, userId]);
+    await pool.query(
+      'INSERT INTO withdrawals (user_id, amount, payment_method, account_details) VALUES ($1, $2, $3, $4)',
+      [userId, amount, paymentMethod, accountDetails]
+    );
+
+    res.json({ message: 'Demande de retrait enregistrée avec succès !' });
+  } catch (err) {
+    console.error("Erreur retrait :", err);
+    res.status(500).json({ error: "Une erreur est survenue lors de la demande." });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Serveur HUBHB démarré sur le port ${PORT}`);
-});
+}); 
