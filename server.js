@@ -9,9 +9,11 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// Route d'accueil
+// Route d'accueil 
+const path = require('path');
+
 app.get('/', (req, res) => {
-  res.send('API HUBHB PTC en ligne');
+  res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // Route pour insérer des publicités de test (à appeler une seule fois)
