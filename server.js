@@ -84,33 +84,7 @@ app.get('/api/me', authenticateToken, async (req, res) => {
   try {
     const user = await pool.query('SELECT id, username, email, balance FROM users WHERE id = $1', [req.user.id]);
     if (user.rows.length === 0) return res.status(404).json({ error: 'Utilisateur introuvable' });
-    
-    const promo = await pool.query("SELECT id FROM user_promos WHERE user_id = $1 AND code = 'EXAUCÉE'", [req.user.id]);
-    const hasPromo = promo.rows.length > 0;
-
-    res.json({ ...user.rows[0], hasPromo });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Route activation du code promo
-app.post('/api/apply-promo', authenticateToken, async (req, res) => {
-  const { code } = req.body;
-  const userId = req.user.id;
-
-  if (!code || code.trim().toUpperCase() !== 'EXAUCÉE') {
-    return res.status(400).json({ error: 'Code promo invalide.' });
-  }
-
-  try {
-    const existing = await pool.query("SELECT id FROM user_promos WHERE user_id = $1 AND code = 'EXAUCÉE'", [userId]);
-    if (existing.rows.length > 0) {
-      return res.status(400).json({ error: 'Vous avez deja active ce code promo.' });
-    }
-
-    await pool.query("INSERT INTO user_promos (user_id, code) VALUES ($1, 'EXAUCÉE')", [userId]);
-    res.json({ message: 'Code EXAUCÉE active ! Vous pouvez regarder chaque pub 5 fois par 24h.' });
+    res.json(user.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -119,22 +93,17 @@ app.post('/api/apply-promo', authenticateToken, async (req, res) => {
 app.get('/api/ads', authenticateToken, async (req, res) => {
   const userId = req.user.id;
   try {
-    const promo = await pool.query("SELECT id FROM user_promos WHERE user_id = $1 AND code = 'EXAUCÉE'", [userId]);
-    const maxViews = promo.rows.length > 0 ? 5 : 1;
-
     const adsQuery = `
       SELECT a.*, 
-        COUNT(v.id) as views_count,
-        CASE WHEN COUNT(v.id) >= $2 THEN true ELSE false END AS watched
+        CASE WHEN v.id IS NOT NULL THEN true ELSE false END AS watched
       FROM ads a
       LEFT JOIN ad_views v 
         ON a.id = v.ad_id 
         AND v.user_id = $1 
         AND v.viewed_at > NOW() - INTERVAL '24 hours'
-      GROUP BY a.id
     `;
-    const ads = await pool.query(adsQuery, [userId, maxViews]);
-    res.json(ads.rows.map(ad => ({ ...ad, maxViews })));
+    const ads = await pool.query(adsQuery, [userId]);
+    res.json(ads.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -144,16 +113,13 @@ app.post('/api/watch-ad', authenticateToken, async (req, res) => {
   const { adId } = req.body;
   const userId = req.user.id;
   try {
-    const promo = await pool.query("SELECT id FROM user_promos WHERE user_id = $1 AND code = 'EXAUCÉE'", [userId]);
-    const maxViews = promo.rows.length > 0 ? 5 : 1;
-
-    const recentViews = await pool.query(
+    const recentView = await pool.query(
       "SELECT id FROM ad_views WHERE user_id = $1 AND ad_id = $2 AND viewed_at > NOW() - INTERVAL '24 hours'",
       [userId, adId]
     );
 
-    if (recentViews.rows.length >= maxViews) {
-      return res.status(400).json({ error: `Limite atteinte (${maxViews} vues / 24h) pour cette publicite.` });
+    if (recentView.rows.length > 0) {
+      return res.status(400).json({ error: 'Vous avez deja regarde cette publicite durant les dernieres 24h.' });
     }
 
     const adQuery = await pool.query('SELECT reward_amount FROM ads WHERE id = $1', [adId]);
@@ -163,19 +129,16 @@ app.post('/api/watch-ad', authenticateToken, async (req, res) => {
 
     const reward = adQuery.rows[0].reward_amount;
 
-    await pool.query(
-      'INSERT INTO ad_views (user_id, ad_id, reward_claimed) VALUES ($1, $2, $3)',
-      [userId, adId, reward]
-    );
+    await pool.query('INSERT INTO ad_views (user_id, ad_id) VALUES ($1, $2)', [userId, adId]);
     await pool.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [reward, userId]);
 
     res.json({ message: 'Gain credite avec succes !', reward });
   } catch (err) {
-    console.error("Erreur watch-ad :", err);
     res.status(500).json({ error: err.message });
   }
 });
 
+// Demander un retrait
 app.post('/api/withdraw', authenticateToken, async (req, res) => {
   const { amount, paymentMethod, accountDetails } = req.body;
   const userId = req.user.id;
@@ -193,6 +156,7 @@ app.post('/api/withdraw', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Solde insuffisant pour effectuer ce retrait.' });
     }
 
+    // Déduire le solde et enregistrer la demande de retrait
     await pool.query('UPDATE users SET balance = balance - $1 WHERE id = $2', [amount, userId]);
     await pool.query(
       'INSERT INTO withdrawals (user_id, amount, payment_method, account_details) VALUES ($1, $2, $3, $4)',
@@ -206,6 +170,7 @@ app.post('/api/withdraw', authenticateToken, async (req, res) => {
   }
 });
 
+// Obtenir l'historique des retraits
 app.get('/api/withdrawals', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(
