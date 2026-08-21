@@ -27,18 +27,6 @@ function authenticateToken(req, res, next) {
   });
 }
 
-async function requireAdmin(req, res, next) {
-  try {
-    const userQuery = await pool.query('SELECT is_admin FROM users WHERE id = $1', [req.user.id]);
-    if (userQuery.rows.length === 0 || !userQuery.rows[0].is_admin) {
-      return res.status(403).json({ error: 'Acces reserve aux administrateurs.' });
-    }
-    next();
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-}
-
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
@@ -94,7 +82,7 @@ app.post('/api/login', async (req, res) => {
 
 app.get('/api/me', authenticateToken, async (req, res) => {
   try {
-    const user = await pool.query('SELECT id, username, email, balance, is_admin FROM users WHERE id = $1', [req.user.id]);
+    const user = await pool.query('SELECT id, username, email, balance FROM users WHERE id = $1', [req.user.id]);
     if (user.rows.length === 0) return res.status(404).json({ error: 'Utilisateur introuvable' });
     
     const promo = await pool.query("SELECT id FROM user_promos WHERE user_id = $1 AND code = 'EXAUCÉE'", [req.user.id]);
@@ -224,54 +212,6 @@ app.get('/api/withdrawals', authenticateToken, async (req, res) => {
       [req.user.id]
     );
     res.json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// --- ROUTES ADMIN ---
-
-app.get('/api/admin/withdrawals', authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const query = `
-      SELECT w.id, u.username, u.email, w.amount, w.payment_method, w.account_details, w.status, w.created_at
-      FROM withdrawals w
-      JOIN users u ON w.user_id = u.id
-      ORDER BY w.created_at DESC
-    `;
-    const result = await pool.query(query);
-    res.json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post('/api/admin/withdrawals/update', authenticateToken, requireAdmin, async (req, res) => {
-  const { withdrawalId, status } = req.body;
-
-  if (!['approved', 'rejected'].includes(status)) {
-    return res.status(400).json({ error: 'Statut invalide.' });
-  }
-
-  try {
-    const withdrawalQuery = await pool.query('SELECT user_id, amount, status FROM withdrawals WHERE id = $1', [withdrawalId]);
-    if (withdrawalQuery.rows.length === 0) {
-      return res.status(404).json({ error: 'Demande introuvable.' });
-    }
-
-    const withdrawal = withdrawalQuery.rows[0];
-    if (withdrawal.status !== 'pending') {
-      return res.status(400).json({ error: 'Cette demande a deja ete traitee.' });
-    }
-
-    // Rembourser le solde si le retrait est refuse
-    if (status === 'rejected') {
-      await pool.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [withdrawal.amount, withdrawal.user_id]);
-    }
-
-    await pool.query('UPDATE withdrawals SET status = $1 WHERE id = $2', [status, withdrawalId]);
-
-    res.json({ message: `Demande de retrait ${status === 'approved' ? 'approuvee' : 'refusee'} avec succes !` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
