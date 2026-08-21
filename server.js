@@ -8,7 +8,6 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 const JWT_SECRET = process.env.JWT_SECRET || 'hubhb_secure_secret_key_2026';
 
-// Configuration de la base de données PostgreSQL (Render)
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
@@ -17,7 +16,6 @@ const pool = new Pool({
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 
-// Initialisation de la base de données et génération des 1000 pubs
 async function initDatabase() {
     try {
         await pool.query(`
@@ -32,7 +30,6 @@ async function initDatabase() {
             CREATE TABLE IF NOT EXISTS ads (
                 id SERIAL PRIMARY KEY,
                 title VARCHAR(255) NOT NULL,
-                ad_url VARCHAR(255) DEFAULT 'https://hubhb-2.onrender.com',
                 reward_amount DECIMAL(10, 2) DEFAULT 2.00,
                 duration_seconds INT DEFAULT 30,
                 active BOOLEAN DEFAULT TRUE
@@ -47,20 +44,19 @@ async function initDatabase() {
             );
         `);
 
-        // Vérifier si les 1000 pubs existent
         const res = await pool.query('SELECT COUNT(*) FROM ads');
         const count = parseInt(res.rows[0].count);
 
         if (count < 1000) {
             console.log('Génération des 1000 publicités...');
-            await pool.query('DELETE FROM ads'); // Nettoyage avant de recréer
+            await pool.query('DELETE FROM ads');
             
             const queryValues = [];
             for (let i = 1; i <= 1000; i++) {
-                queryValues.push(`('Sponsor Local #${i}', 'https://hubhb-2.onrender.com', 2.00, 30, true)`);
+                queryValues.push(`('Sponsor Local #${i}', 2.00, 30, true)`);
             }
             
-            await pool.query(`INSERT INTO ads (title, ad_url, reward_amount, duration_seconds, active) VALUES ${queryValues.join(',')}`);
+            await pool.query(`INSERT INTO ads (title, reward_amount, duration_seconds, active) VALUES ${queryValues.join(',')}`);
             console.log('1000 publicités générées avec succès !');
         }
 
@@ -72,7 +68,6 @@ async function initDatabase() {
 
 initDatabase();
 
-// Middleware d'authentification JWT
 function authenticateToken(req, res, next) {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -85,7 +80,6 @@ function authenticateToken(req, res, next) {
     });
 }
 
-// Routes API Authentification
 app.post('/api/register', async (req, res) => {
     try {
         const { username, email, password } = req.body;
@@ -126,7 +120,6 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// Routes API Publicités
 app.get('/api/ads', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.id;
@@ -160,7 +153,6 @@ app.post('/api/watch-ad', authenticateToken, async (req, res) => {
     }
 });
 
-// Redirection vers le frontend
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
@@ -168,4 +160,3 @@ app.get('*', (req, res) => {
 app.listen(PORT, () => {
     console.log(`Serveur actif sur le port ${PORT}`);
 });
- 
