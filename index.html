@@ -6,7 +6,8 @@
   <title>HUBHB - Gagner de l'argent en regardant des pubs</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; }
-    h1 { color: #333; }
+    .header { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+    .balance-box { font-size: 1.2rem; font-weight: bold; color: #28a745; }
     .ad-card { background: white; padding: 15px; margin-bottom: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
     button { background-color: #28a745; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; }
     button:hover { background-color: #218838; }
@@ -15,12 +16,29 @@
 </head>
 <body>
 
-  <h1>Publicités disponibles</h1>
+  <div class="header">
+    <h1>HUBHB PTC</h1>
+    <div class="balance-box">Solde : <span id="user-balance">0.0000</span> $</div>
+  </div>
+
+  <h2>Publicités disponibles</h2>
   <div id="ads-container">Chargement des publicités...</div>
 
   <script>
-    // ID temporaire d'utilisateur pour les tests
     const testUserId = '1';
+
+    // Charger le solde de l'utilisateur
+    async function fetchUserBalance() {
+      try {
+        const res = await fetch(`/api/user/${testUserId}`);
+        const data = await res.json();
+        if (data.balance !== undefined) {
+          document.getElementById('user-balance').innerText = parseFloat(data.balance).toFixed(4);
+        }
+      } catch (err) {
+        console.error("Erreur de chargement du solde", err);
+      }
+    }
 
     async function fetchAds() {
       try {
@@ -56,7 +74,6 @@
       const btn = document.getElementById(`btn-${adId}`);
       btn.disabled = true;
 
-      // Ouvrir la pub dans un nouvel onglet
       window.open(adUrl, '_blank');
 
       let timer = duration;
@@ -70,7 +87,6 @@
           clearInterval(interval);
           btn.innerText = "Validation en cours...";
 
-          // Enregistrer le gain côté serveur
           try {
             const res = await fetch('/api/watch-ad', {
               method: 'POST',
@@ -82,6 +98,7 @@
             if (res.ok) {
               btn.innerText = "Gain crédité ! ✅";
               alert(`Bravo ! Vous avez gagné ${data.reward} $`);
+              fetchUserBalance(); // Mettre à jour le solde à l'écran
             } else {
               btn.innerText = "Erreur";
               alert(data.error || "Erreur de validation");
@@ -93,6 +110,8 @@
       }, 1000);
     }
 
+    // Initialisation
+    fetchUserBalance();
     fetchAds();
   </script>
 </body>
