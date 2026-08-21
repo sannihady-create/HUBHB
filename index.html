@@ -31,7 +31,6 @@
   <div class="container">
     <h1>HUBHB</h1>
 
-    <!-- FORMULAIRE AUTHENTIFICATION -->
     <div id="authSection">
       <h2>Connexion / Inscription</h2>
       <div class="form-group">
@@ -55,14 +54,13 @@
       <div id="authMessage" class="message"></div>
     </div>
 
-    <!-- TABLEAU DE BORD -->
     <div id="dashboardSection" class="dashboard hidden">
       <div class="card">
         <h3>Bienvenue, <span id="userUsername"></span> !</h3>
-        <p>Solde actuel : <strong><span id="userBalance">0.00</span> $</strong></p>
+        <p>Solde actuel : <strong><span id="userBalance">0</span> FCFA</strong></p>
       </div>
 
-      <h2>Publicités disponibles</h2>
+      <h2>Publicités quotidiennes (50 disponibles)</h2>
       <div id="adsList"></div>
 
       <button id="logoutBtn" style="background-color: #7f8c8d; color: white; margin-top: 20px;">Déconnexion</button>
@@ -78,7 +76,6 @@
     const authSection = document.getElementById('authSection');
     const dashboardSection = document.getElementById('dashboardSection');
 
-    // Action : Connexion
     loginBtn.addEventListener('click', async () => {
       const email = document.getElementById('email').value.trim();
       const password = document.getElementById('password').value;
@@ -102,7 +99,7 @@
 
         if (data.user) {
           document.getElementById('userUsername').textContent = data.user.username;
-          document.getElementById('userBalance').textContent = parseFloat(data.user.balance).toFixed(2);
+          document.getElementById('userBalance').textContent = Math.round(data.user.balance);
         }
 
         authSection.classList.add('hidden');
@@ -114,7 +111,6 @@
       }
     });
 
-    // Action : Inscription
     registerBtn.addEventListener('click', async () => {
       const username = document.getElementById('username').value.trim();
       const email = document.getElementById('email').value.trim();
@@ -146,7 +142,6 @@
       authMessage.className = `message ${isError ? 'error' : 'success'}`;
     }
 
-    // Charger les pubs
     async function loadAds() {
       const token = localStorage.getItem('hubhb_token');
       try {
@@ -168,7 +163,7 @@
           div.innerHTML = `
             <div>
               <strong>${ad.title || 'Publicité'}</strong><br>
-              <small>Gain : ${ad.reward_amount} $</small>
+              <small>Gain : ${Math.round(ad.reward_amount)} FCFA</small>
             </div>
             <button onclick="watchAd(${ad.id})" ${ad.watched ? 'disabled' : ''} style="background-color: ${ad.watched ? '#bdc3c7' : '#27ae60'}; color: white;">
               ${ad.watched ? 'Déjà vue' : 'Regarder'}
@@ -181,7 +176,6 @@
       }
     }
 
-    // Regarder une pub
     async function watchAd(adId) {
       const token = localStorage.getItem('hubhb_token');
       try {
@@ -196,6 +190,8 @@
         const data = await res.json();
         if (res.ok) {
           alert('Bravo ! Gain crédité.');
+          const currentBal = parseFloat(document.getElementById('userBalance').textContent) || 0;
+          document.getElementById('userBalance').textContent = Math.round(currentBal + parseFloat(data.reward));
           loadAds();
         } else {
           alert(data.error);
@@ -205,7 +201,6 @@
       }
     }
 
-    // Déconnexion
     document.getElementById('logoutBtn').addEventListener('click', () => {
       localStorage.removeItem('hubhb_token');
       authSection.classList.remove('hidden');
