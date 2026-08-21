@@ -13,7 +13,11 @@
     button { background: #28a745; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; }
     button:disabled { background: #ccc; cursor: not-allowed; }
     .auth-box { max-width: 400px; margin: auto; }
-    input { width: 100%; padding: 10px; margin: 8px 0; box-sizing: border-box; }
+    input, select { width: 100%; padding: 10px; margin: 8px 0; box-sizing: border-box; }
+    .section { margin-top: 30px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background-color: #f2f2f2; }
   </style>
 </head>
 <body>
@@ -38,8 +42,47 @@
         </div>
       </div>
       <hr>
+
+      <div class="card" style="background: #e9ecef;">
+        <h3>Code Promo</h3>
+        <input type="text" id="promo-input" placeholder="Entrer votre code promo">
+        <button onclick="applyPromo()" style="background: #ffc107; color: black;">Activer le code</button>
+        <p id="promo-status" style="margin-top: 5px; font-weight: bold;"></p>
+      </div>
+
       <h2>Publicités disponibles</h2>
       <div id="ads-list"></div>
+
+      <div class="section">
+        <h2>Demander un retrait (Minimum 1.00 $)</h2>
+        <div class="card">
+          <input type="number" id="withdraw-amount" step="0.01" placeholder="Montant en USD ($)">
+          <select id="withdraw-method">
+            <option value="FaucetPay">FaucetPay</option>
+            <option value="Payeer">Payeer</option>
+            <option value="Mobile Money">Mobile Money</option>
+            <option value="PayPal">PayPal</option>
+          </select>
+          <input type="text" id="withdraw-account" placeholder="Adresse email ou numéro de compte">
+          <button onclick="requestWithdrawal()" style="background:#17a2b8;">Envoyer la demande</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Historique des retraits</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Montant</th>
+              <th>Moyen</th>
+              <th>Compte</th>
+              <th>Statut</th>
+            </tr>
+          </thead>
+          <tbody id="withdrawals-list"></tbody>
+        </table>
+      </div>
+
     </div>
   </div>
 
@@ -57,13 +100,39 @@
           document.getElementById('dashboard').classList.remove('hidden');
           document.getElementById('user-name').innerText = user.username;
           document.getElementById('user-balance').innerText = parseFloat(user.balance).toFixed(4);
+          
+          if (user.hasPromo) {
+            document.getElementById('promo-status').innerText = "Code EXAUCÉE actif (5 vues/pub autorisées) ! ✨";
+          }
+
           fetchAds();
+          fetchWithdrawals();
         } else {
           logout();
         }
       } else {
         document.getElementById('auth-section').classList.remove('hidden');
         document.getElementById('dashboard').classList.add('hidden');
+      }
+    }
+
+    async function applyPromo() {
+      const code = document.getElementById('promo-input').value;
+      const res = await fetch('/api/apply-promo', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ code })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message);
+        document.getElementById('promo-input').value = '';
+        updateUI();
+      } else {
+        alert(data.error);
       }
     }
 
@@ -79,7 +148,7 @@
       });
       const data = await res.json();
       if (res.ok) {
-        alert("Compte crée avec succès ! Connecte-toi.");
+        alert("Compte créé avec succès ! Connecte-toi.");
       } else {
         alert(data.error);
       }
@@ -123,9 +192,12 @@
         div.className = 'card';
         
         const isWatched = ad.watched;
+        const viewsCount = parseInt(ad.views_count) || 0;
+        const maxViews = ad.maxViews || 1;
+
         const buttonHTML = isWatched 
-          ? `<button disabled style="background:#6c757d;">Déjà vue aujourd'hui ✅</button>`
-          : `<button id="btn-${ad.id}" onclick="watchAd(${ad.id}, '${ad.ad_url}', ${ad.duration_seconds})">Regarder l'annonce</button>`;
+          ? `<button disabled style="background:#6c757d;">Limite atteinte (${viewsCount}/${maxViews}) ✅</button>`
+          : `<button id="btn-${ad.id}" onclick="watchAd(${ad.id}, '${ad.ad_url}', ${ad.duration_seconds})">Regarder l'annonce (${viewsCount}/${maxViews})</button>`;
 
         div.innerHTML = `
           <h3>${ad.title}</h3>
@@ -166,6 +238,55 @@
           }
         }
       }, 1000);
+    }
+
+    async function requestWithdrawal() {
+      const amount = parseFloat(document.getElementById('withdraw-amount').value);
+      const paymentMethod = document.getElementById('withdraw-method').value;
+      const accountDetails = document.getElementById('withdraw-account').value;
+
+      if (!amount || !accountDetails) {
+        return alert("Veuillez remplir tous les champs du formulaire de retrait.");
+      }
+
+      const res = await fetch('/api/withdraw', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ amount, paymentMethod, accountDetails })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message);
+        document.getElementById('withdraw-amount').value = '';
+        document.getElementById('withdraw-account').value = '';
+        updateUI();
+      } else {
+        alert(data.error);
+      }
+    }
+
+    async function fetchWithdrawals() {
+      const res = await fetch('/api/withdrawals', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const withdrawals = await res.json();
+      const list = document.getElementById('withdrawals-list');
+      list.innerHTML = '';
+
+      withdrawals.forEach(w => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${parseFloat(w.amount).toFixed(2)} $</td>
+          <td>${w.payment_method}</td>
+          <td>${w.account_details}</td>
+          <td><b>${w.status}</b></td>
+        `;
+        list.appendChild(tr);
+      });
     }
 
     updateUI();
