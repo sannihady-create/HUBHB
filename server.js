@@ -56,7 +56,7 @@ app.post('/api/register', async (req, res) => {
       [username, email, hashedPassword, 0]
     );
     res.json({ message: 'Compte cree avec succes !', user: newUser.rows[0] });
-  } catch (err) {
+  if (err.code === "23505") {
     res.status(400).json({ error: "Email ou nom d'utilisateur déja utilisé." });
   }
 });
