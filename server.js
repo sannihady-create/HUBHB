@@ -14,26 +14,26 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// Middleware pour vérifier le Token JWT
+// Middleware pour verifier le Token JWT
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
-  if (!token) return res.status(01).json({ error: 'Accès non autorisé. Token manquant.' });
+  if (!token) return res.status(401).json({ error: 'Acces non autorise. Token manquant.' });
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ error: 'Token invalide ou expiré.' });
+    if (err) return res.status(403).json({ error: 'Token invalide ou expire.' });
     req.user = user;
     next();
   });
 }
 
-// Route d'accueil
+// Route accueil
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Route inscription avec gestion erreurs
+// Route inscription
 app.post('/api/register', async (req, res) => {
   const { username, email, password } = req.body;
   try {
@@ -52,7 +52,7 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
-// Route de connexion avec génération de Token
+// Route connexion
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -67,7 +67,6 @@ app.post('/api/login', async (req, res) => {
       return res.status(400).json({ error: 'Mot de passe incorrect.' });
     }
 
-    // Génération du token JWT valide 24h
     const token = jwt.sign(
       { id: user.id, username: user.username },
       JWT_SECRET,
@@ -75,7 +74,7 @@ app.post('/api/login', async (req, res) => {
     );
 
     res.json({
-      message: 'Connexion réussie !',
+      message: 'Connexion reussie !',
       token,
       user: { id: user.id, username: user.username, balance: user.balance }
     });
@@ -85,7 +84,7 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// Récupérer les informations de l'utilisateur connecté (Protégé)
+// Recuperer utilisateur connecte
 app.get('/api/me', authenticateToken, async (req, res) => {
   try {
     const user = await pool.query('SELECT id, username, email, balance FROM users WHERE id = $1', [req.user.id]);
@@ -96,24 +95,44 @@ app.get('/api/me', authenticateToken, async (req, res) => {
   }
 });
 
-// Récupérer la liste des pubs
-app.get('/api/ads', async (req, res) => {
+// Recuperer les pub avec statut de visionnage sur les dernieres 24h
+app.get('/api/ads', authenticateToken, async (req, res) => {
+  const userId = req.user.id;
   try {
-    const ads = await pool.query('SELECT * FROM ads');
+    const adsQuery = `
+      SELECT a.*, 
+        CASE WHEN v.id IS NOT NULL THEN true ELSE false END AS watched
+      FROM ads a
+      LEFT JOIN ad_views v 
+        ON a.id = v.ad_id 
+        AND v.user_id = $1 
+        AND v.viewed_at > NOW() - INTERVAL '24 hours'
+    `;
+    const ads = await pool.query(adsQuery, [userId]);
     res.json(ads.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Enregistrer le visionnage et créditer le gain (Protégé)
+// Crediter le gain avec verification Anti-Triche 24h
 app.post('/api/watch-ad', authenticateToken, async (req, res) => {
   const { adId } = req.body;
   const userId = req.user.id;
   try {
+    // Verification du visionnage durant les 24h
+    const recentView = await pool.query(
+      "SELECT id FROM ad_views WHERE user_id = $1 AND ad_id = $2 AND viewed_at > NOW() - INTERVAL '24 hours'",
+      [userId, adId]
+    );
+
+    if (recentView.rows.length > 0) {
+      return res.status(400).json({ error: 'Vous avez deja regarde cette publicite durant les dernieres 24h.' });
+    }
+
     const adQuery = await pool.query('SELECT reward_amount FROM ads WHERE id = $1', [adId]);
     if (adQuery.rows.length === 0) {
-      return res.status(404).json({ error: 'Publicité introuvable' });
+      return res.status(404).json({ error: 'Publicite introuvable' });
     }
 
     const reward = adQuery.rows[0].reward_amount;
@@ -121,7 +140,7 @@ app.post('/api/watch-ad', authenticateToken, async (req, res) => {
     await pool.query('INSERT INTO ad_views (user_id, ad_id) VALUES ($1, $2)', [userId, adId]);
     await pool.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [reward, userId]);
 
-    res.json({ message: 'Gain crédité avec succès !', reward });
+    res.json({ message: 'Gain credite avec succes !', reward });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -129,5 +148,5 @@ app.post('/api/watch-ad', authenticateToken, async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Serveur HUBHB démarré sur le port ${PORT}`);
+  console.log(`Serveur HUBHB demarre sur le port ${PORT}`);
 });
