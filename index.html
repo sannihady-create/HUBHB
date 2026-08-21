@@ -1,3 +1,83 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HUBHB - Gagnez de l'argent</title>
+  <style>
+    * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; }
+    body { background-color: #f4f6f9; color: #333; padding: 20px; }
+    .container { max-width: 500px; margin: 0 auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+    h1, h2 { text-align: center; margin-bottom: 20px; color: #2c3e50; }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; font-weight: bold; }
+    input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 16px; }
+    .btn-group { display: flex; gap: 10px; margin-top: 15px; }
+    button { flex: 1; padding: 12px; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+    .btn-login { background-color: #27ae60; color: white; }
+    .btn-register { background-color: #2980b9; color: white; }
+    button:hover { opacity: 0.9; }
+    .message { margin-top: 15px; text-align: center; font-weight: bold; }
+    .error { color: #e74c3c; }
+    .success { color: #27ae60; }
+    .hidden { display: none; }
+    .dashboard { margin-top: 20px; }
+    .card { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #2980b9; }
+    .ad-card { background: #fff; border: 1px solid #ddd; padding: 15px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>HUBHB</h1>
+
+    <!-- FORMULAIRE AUTHENTIFICATION -->
+    <div id="authSection">
+      <h2>Connexion / Inscription</h2>
+      <div class="form-group">
+        <label>Nom d'utilisateur (pour inscription)</label>
+        <input type="text" id="username" placeholder="Ex: Hady229">
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="email" placeholder="votre@email.com" required>
+      </div>
+      <div class="form-group">
+        <label>Mot de passe</label>
+        <input type="password" id="password" placeholder="••••••••" required>
+      </div>
+
+      <div class="btn-group">
+        <button type="button" class="btn-login" id="loginBtn">Se connecter</button>
+        <button type="button" class="btn-register" id="registerBtn">S'inscrire</button>
+      </div>
+
+      <div id="authMessage" class="message"></div>
+    </div>
+
+    <!-- TABLEAU DE BORD -->
+    <div id="dashboardSection" class="dashboard hidden">
+      <div class="card">
+        <h3>Bienvenue, <span id="userUsername"></span> !</h3>
+        <p>Solde actuel : <strong><span id="userBalance">0.00</span> $</strong></p>
+      </div>
+
+      <h2>Publicités disponibles</h2>
+      <div id="adsList"></div>
+
+      <button id="logoutBtn" style="background-color: #7f8c8d; color: white; margin-top: 20px;">Déconnexion</button>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = '/api';
+
+    const loginBtn = document.getElementById('loginBtn');
+    const registerBtn = document.getElementById('registerBtn');
+    const authMessage = document.getElementById('authMessage');
+    const authSection = document.getElementById('authSection');
+    const dashboardSection = document.getElementById('dashboardSection');
+
     // Action : Connexion
     loginBtn.addEventListener('click', async () => {
       const email = document.getElementById('email').value.trim();
@@ -18,21 +98,119 @@
 
         if (!res.ok) throw new Error(data.error || 'Erreur de connexion');
 
-        // Enregistrement du token
         localStorage.setItem('hubhb_token', data.token);
-        
-        // Mise à jour directe des données à l'écran
-        document.getElementById('userUsername').textContent = data.user.username;
-        document.getElementById('userBalance').textContent = parseFloat(data.user.balance).toFixed(2);
-        
-        // Masquer le formulaire et afficher le tableau de bord
+
+        if (data.user) {
+          document.getElementById('userUsername').textContent = data.user.username;
+          document.getElementById('userBalance').textContent = parseFloat(data.user.balance).toFixed(2);
+        }
+
         authSection.classList.add('hidden');
         dashboardSection.classList.remove('hidden');
-
-        // Charger la liste des publicités
         loadAds();
 
       } catch (err) {
         showMessage(err.message, true);
       }
     });
+
+    // Action : Inscription
+    registerBtn.addEventListener('click', async () => {
+      const username = document.getElementById('username').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+
+      if (!username || !email || !password) {
+        showMessage('Veuillez remplir tous les champs pour vous inscrire.', true);
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_URL}/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, email, password })
+        });
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || 'Erreur lors de l\'inscription');
+
+        showMessage('Compte créé avec succès ! Cliquez maintenant sur Se connecter.', false);
+      } catch (err) {
+        showMessage(err.message, true);
+      }
+    });
+
+    function showMessage(msg, isError) {
+      authMessage.textContent = msg;
+      authMessage.className = `message ${isError ? 'error' : 'success'}`;
+    }
+
+    // Charger les pubs
+    async function loadAds() {
+      const token = localStorage.getItem('hubhb_token');
+      try {
+        const res = await fetch(`${API_URL}/ads`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const ads = await res.json();
+        const adsList = document.getElementById('adsList');
+        adsList.innerHTML = '';
+
+        if (!Array.isArray(ads) || ads.length === 0) {
+          adsList.innerHTML = '<p>Aucune publicité disponible pour le moment.</p>';
+          return;
+        }
+
+        ads.forEach(ad => {
+          const div = document.createElement('div');
+          div.className = 'ad-card';
+          div.innerHTML = `
+            <div>
+              <strong>${ad.title || 'Publicité'}</strong><br>
+              <small>Gain : ${ad.reward_amount} $</small>
+            </div>
+            <button onclick="watchAd(${ad.id})" ${ad.watched ? 'disabled' : ''} style="background-color: ${ad.watched ? '#bdc3c7' : '#27ae60'}; color: white;">
+              ${ad.watched ? 'Déjà vue' : 'Regarder'}
+            </button>
+          `;
+          adsList.appendChild(div);
+        });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // Regarder une pub
+    async function watchAd(adId) {
+      const token = localStorage.getItem('hubhb_token');
+      try {
+        const res = await fetch(`${API_URL}/watch-ad`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ adId })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          alert('Bravo ! Gain crédité.');
+          loadAds();
+        } else {
+          alert(data.error);
+        }
+      } catch (err) {
+        alert('Erreur lors du visionnage');
+      }
+    }
+
+    // Déconnexion
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+      localStorage.removeItem('hubhb_token');
+      authSection.classList.remove('hidden');
+      dashboardSection.classList.add('hidden');
+    });
+  </script>
+</body>
+</html>
