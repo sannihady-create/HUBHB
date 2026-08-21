@@ -43,13 +43,6 @@
       </div>
       <hr>
 
-      <div class="card" style="background: #e9ecef;">
-        <h3>Code Promo</h3>
-        <input type="text" id="promo-input" placeholder="Entrer votre code promo">
-        <button onclick="applyPromo()" style="background: #ffc107; color: black;">Activer le code</button>
-        <p id="promo-status" style="margin-top: 5px; font-weight: bold;"></p>
-      </div>
-
       <h2>Publicités disponibles</h2>
       <div id="ads-list"></div>
 
@@ -100,11 +93,6 @@
           document.getElementById('dashboard').classList.remove('hidden');
           document.getElementById('user-name').innerText = user.username;
           document.getElementById('user-balance').innerText = parseFloat(user.balance).toFixed(4);
-          
-          if (user.hasPromo) {
-            document.getElementById('promo-status').innerText = "Code EXAUCÉE actif (5 vues/pub autorisées) ! ✨";
-          }
-
           fetchAds();
           fetchWithdrawals();
         } else {
@@ -113,26 +101,6 @@
       } else {
         document.getElementById('auth-section').classList.remove('hidden');
         document.getElementById('dashboard').classList.add('hidden');
-      }
-    }
-
-    async function applyPromo() {
-      const code = document.getElementById('promo-input').value;
-      const res = await fetch('/api/apply-promo', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ code })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        alert(data.message);
-        document.getElementById('promo-input').value = '';
-        updateUI();
-      } else {
-        alert(data.error);
       }
     }
 
@@ -192,12 +160,9 @@
         div.className = 'card';
         
         const isWatched = ad.watched;
-        const viewsCount = parseInt(ad.views_count) || 0;
-        const maxViews = ad.maxViews || 1;
-
         const buttonHTML = isWatched 
-          ? `<button disabled style="background:#6c757d;">Limite atteinte (${viewsCount}/${maxViews}) ✅</button>`
-          : `<button id="btn-${ad.id}" onclick="watchAd(${ad.id}, '${ad.ad_url}', ${ad.duration_seconds})">Regarder l'annonce (${viewsCount}/${maxViews})</button>`;
+          ? `<button disabled style="background:#6c757d;">Déjà vue aujourd'hui ✅</button>`
+          : `<button id="btn-${ad.id}" onclick="watchAd(${ad.id}, '${ad.ad_url}', ${ad.duration_seconds})">Regarder l'annonce</button>`;
 
         div.innerHTML = `
           <h3>${ad.title}</h3>
