@@ -18,6 +18,8 @@
     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
     th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
     th { background-color: #f2f2f2; }
+    .btn-approve { background: #28a745; padding: 5px 10px; }
+    .btn-reject { background: #dc3545; padding: 5px 10px; }
   </style>
 </head>
 <body>
@@ -42,6 +44,13 @@
         </div>
       </div>
       <hr>
+
+      <div class="card" style="background: #e9ecef;">
+        <h3>Code Promo</h3>
+        <input type="text" id="promo-input" placeholder="Entrer votre code promo">
+        <button onclick="applyPromo()" style="background: #ffc107; color: black;">Activer le code</button>
+        <p id="promo-status" style="margin-top: 5px; font-weight: bold;"></p>
+      </div>
 
       <h2>Publicités disponibles</h2>
       <div id="ads-list"></div>
@@ -76,6 +85,24 @@
         </table>
       </div>
 
+      <div id="admin-section" class="section hidden" style="border: 2px dashed #dc3545; padding: 15px; border-radius: 8px; margin-top: 40px;">
+        <h2 style="color: #dc3545;">Panneau d'administration</h2>
+        <h3>Demandes de retrait des utilisateurs</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Utilisateur</th>
+              <th>Montant</th>
+              <th>Moyen</th>
+              <th>Compte</th>
+              <th>Statut</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="admin-withdrawals-list"></tbody>
+        </table>
+      </div>
+
     </div>
   </div>
 
@@ -93,6 +120,18 @@
           document.getElementById('dashboard').classList.remove('hidden');
           document.getElementById('user-name').innerText = user.username;
           document.getElementById('user-balance').innerText = parseFloat(user.balance).toFixed(4);
+          
+          if (user.hasPromo) {
+            document.getElementById('promo-status').innerText = "Code EXAUCÉE actif (5 vues/pub autorisées) ! ✨";
+          }
+
+          if (user.is_admin) {
+            document.getElementById('admin-section').classList.remove('hidden');
+            fetchAdminWithdrawals();
+          } else {
+            document.getElementById('admin-section').classList.add('hidden');
+          }
+
           fetchAds();
           fetchWithdrawals();
         } else {
@@ -101,6 +140,26 @@
       } else {
         document.getElementById('auth-section').classList.remove('hidden');
         document.getElementById('dashboard').classList.add('hidden');
+      }
+    }
+
+    async function applyPromo() {
+      const code = document.getElementById('promo-input').value;
+      const res = await fetch('/api/apply-promo', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ code })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message);
+        document.getElementById('promo-input').value = '';
+        updateUI();
+      } else {
+        alert(data.error);
       }
     }
 
@@ -160,9 +219,12 @@
         div.className = 'card';
         
         const isWatched = ad.watched;
+        const viewsCount = parseInt(ad.views_count) || 0;
+        const maxViews = ad.maxViews || 1;
+
         const buttonHTML = isWatched 
-          ? `<button disabled style="background:#6c757d;">Déjà vue aujourd'hui ✅</button>`
-          : `<button id="btn-${ad.id}" onclick="watchAd(${ad.id}, '${ad.ad_url}', ${ad.duration_seconds})">Regarder l'annonce</button>`;
+          ? `<button disabled style="background:#6c757d;">Limite atteinte (${viewsCount}/${maxViews}) ✅</button>`
+          : `<button id="btn-${ad.id}" onclick="watchAd(${ad.id}, '${ad.ad_url}', ${ad.duration_seconds})">Regarder l'annonce (${viewsCount}/${maxViews})</button>`;
 
         div.innerHTML = `
           <h3>${ad.title}</h3>
@@ -252,6 +314,55 @@
         `;
         list.appendChild(tr);
       });
+    }
+
+    async function fetchAdminWithdrawals() {
+      const res = await fetch('/api/admin/withdrawals', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) return;
+      const withdrawals = await res.json();
+      const list = document.getElementById('admin-withdrawals-list');
+      list.innerHTML = '';
+
+      withdrawals.forEach(w => {
+        const tr = document.createElement('tr');
+        const actions = w.status === 'pending' 
+          ? `<button class="btn-approve" onclick="updateWithdrawalStatus(${w.id}, 'approved')">Payer</button> 
+             <button class="btn-reject" onclick="updateWithdrawalStatus(${w.id}, 'rejected')">Refuser</button>`
+          : `-`;
+
+        tr.innerHTML = `
+          <td>${w.username} (${w.email})</td>
+          <td>${parseFloat(w.amount).toFixed(2)} $</td>
+          <td>${w.payment_method}</td>
+          <td>${w.account_details}</td>
+          <td><b>${w.status}</b></td>
+          <td>${actions}</td>
+        `;
+        list.appendChild(tr);
+      });
+    }
+
+    async function updateWithdrawalStatus(withdrawalId, status) {
+      if (!confirm(`Confirmer le changement de statut en : ${status} ?`)) return;
+
+      const res = await fetch('/api/admin/withdrawals/update', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ withdrawalId, status })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message);
+        updateUI();
+      } else {
+        alert(data.error);
+      }
     }
 
     updateUI();
