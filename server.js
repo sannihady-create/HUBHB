@@ -33,7 +33,7 @@ app.get('/api/seed-ads', async (req, res) => {
   }
 });
 
-// Route d'inscription avec ta gestion d'erreurs
+// Route inscription avec gestion erreurs
 app.post('/api/register', async (req, res) => {
   const { username, email, password } = req.body;
   try {
@@ -42,13 +42,13 @@ app.post('/api/register', async (req, res) => {
       'INSERT INTO users (username, email, password_hash, balance) VALUES ($1, $2, $3, $4) RETURNING id, username, balance',
       [username, email, hashedPassword, 0]
     );
-    res.json({ message: 'Compte créé avec succès !', user: newUser.rows[0] });
+    res.json({ message: 'Compte cree avec succes !', user: newUser.rows[0] });
   } catch (err) {
     console.error("Erreur inscription :", err);
 
     if (err.code === "23505") {
       return res.status(400).json({
-        error: "Email ou nom d'utilisateur déjà utilisé."
+        error: "Email ou nom utilisateur deja utilise."
       });
     }
 
