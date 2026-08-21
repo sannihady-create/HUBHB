@@ -14,7 +14,6 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// Middleware pour verifier le Token JWT
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -28,12 +27,10 @@ function authenticateToken(req, res, next) {
   });
 }
 
-// Route accueil
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Route inscription
 app.post('/api/register', async (req, res) => {
   const { username, email, password } = req.body;
   try {
@@ -52,7 +49,6 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
-// Route connexion
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -84,7 +80,6 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// Recuperer utilisateur connecte
 app.get('/api/me', authenticateToken, async (req, res) => {
   try {
     const user = await pool.query('SELECT id, username, email, balance FROM users WHERE id = $1', [req.user.id]);
@@ -95,7 +90,6 @@ app.get('/api/me', authenticateToken, async (req, res) => {
   }
 });
 
-// Recuperer les pub avec statut de visionnage sur les dernieres 24h
 app.get('/api/ads', authenticateToken, async (req, res) => {
   const userId = req.user.id;
   try {
@@ -115,12 +109,11 @@ app.get('/api/ads', authenticateToken, async (req, res) => {
   }
 });
 
-// Crediter le gain avec verification Anti-Triche 24h
+// Route visionnage corrigee avec insertion de reward_claimed
 app.post('/api/watch-ad', authenticateToken, async (req, res) => {
   const { adId } = req.body;
   const userId = req.user.id;
   try {
-    // Verification du visionnage durant les 24h
     const recentView = await pool.query(
       "SELECT id FROM ad_views WHERE user_id = $1 AND ad_id = $2 AND viewed_at > NOW() - INTERVAL '24 hours'",
       [userId, adId]
@@ -137,10 +130,57 @@ app.post('/api/watch-ad', authenticateToken, async (req, res) => {
 
     const reward = adQuery.rows[0].reward_amount;
 
-    await pool.query('INSERT INTO ad_views (user_id, ad_id) VALUES ($1, $2)', [userId, adId]);
+    // Insertion corrigee : passage de reward_amount a reward_claimed
+    await pool.query(
+      'INSERT INTO ad_views (user_id, ad_id, reward_claimed) VALUES ($1, $2, $3)',
+      [userId, adId, reward]
+    );
     await pool.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [reward, userId]);
 
     res.json({ message: 'Gain credite avec succes !', reward });
+  } catch (err) {
+    console.error("Erreur watch-ad :", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/withdraw', authenticateToken, async (req, res) => {
+  const { amount, paymentMethod, accountDetails } = req.body;
+  const userId = req.user.id;
+  const minWithdrawal = 1.00;
+
+  if (!amount || amount < minWithdrawal) {
+    return res.status(400).json({ error: `Le montant minimum de retrait est de ${minWithdrawal} $.` });
+  }
+
+  try {
+    const userQuery = await pool.query('SELECT balance FROM users WHERE id = $1', [userId]);
+    const currentBalance = parseFloat(userQuery.rows[0].balance);
+
+    if (currentBalance < amount) {
+      return res.status(400).json({ error: 'Solde insuffisant pour effectuer ce retrait.' });
+    }
+
+    await pool.query('UPDATE users SET balance = balance - $1 WHERE id = $2', [amount, userId]);
+    await pool.query(
+      'INSERT INTO withdrawals (user_id, amount, payment_method, account_details) VALUES ($1, $2, $3, $4)',
+      [userId, amount, paymentMethod, accountDetails]
+    );
+
+    res.json({ message: 'Demande de retrait enregistree avec succes !' });
+  } catch (err) {
+    console.error("Erreur retrait :", err);
+    res.status(500).json({ error: "Une erreur est survenue lors de la demande." });
+  }
+});
+
+app.get('/api/withdrawals', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT amount, payment_method, account_details, status, created_at FROM withdrawals WHERE user_id = $1 ORDER BY created_at DESC',
+      [req.user.id]
+    );
+    res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
