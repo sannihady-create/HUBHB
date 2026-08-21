@@ -31,36 +31,53 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
+// ROUTE INSCRIPTION
 app.post('/api/register', async (req, res) => {
   const { username, email, password } = req.body;
+  
+  if (!username || !email || !password) {
+    return res.status(400).json({ error: 'Veuillez remplir tous les champs.' });
+  }
+
   try {
+    const cleanUsername = username.trim();
+    const cleanEmail = email.trim().toLowerCase();
     const hashedPassword = await bcrypt.hash(password, 10);
+
     const newUser = await pool.query(
       'INSERT INTO users (username, email, password_hash, balance) VALUES ($1, $2, $3, $4) RETURNING id, username, balance',
-      [username, email, hashedPassword, 0]
+      [cleanUsername, cleanEmail, hashedPassword, 0]
     );
     res.json({ message: 'Compte cree avec succes !', user: newUser.rows[0] });
   } catch (err) {
     console.error("Erreur inscription :", err);
     if (err.code === "23505") {
-      return res.status(400).json({ error: "Email ou nom utilisateur deja utilise." });
+      return res.status(400).json({ error: "Email ou nom d'utilisateur déjà utilisé." });
     }
-    res.status(500).json({ error: "Une erreur interne est survenue." });
+    res.status(500).json({ error: "Une erreur interne est survenue lors de l'inscription." });
   }
 });
 
+// ROUTE CONNEXION CORRIGÉE
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ error: "Veuillez remplir l'email et le mot de passe." });
+  }
+
   try {
-    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    const cleanEmail = email.trim().toLowerCase();
+
+    const result = await pool.query('SELECT * FROM users WHERE LOWER(email) = $1', [cleanEmail]);
     if (result.rows.length === 0) {
-      return res.status(400).json({ error: 'Utilisateur introuvable.' });
+      return res.status(400).json({ error: 'Email ou mot de passe incorrect.' });
     }
 
     const user = result.rows[0];
     const validPassword = await bcrypt.compare(password, user.password_hash);
     if (!validPassword) {
-      return res.status(400).json({ error: 'Mot de passe incorrect.' });
+      return res.status(400).json({ error: 'Email ou mot de passe incorrect.' });
     }
 
     const token = jwt.sign(
