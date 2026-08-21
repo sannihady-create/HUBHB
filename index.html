@@ -111,7 +111,9 @@
     }
 
     async function fetchAds() {
-      const res = await fetch('/api/ads');
+      const res = await fetch('/api/ads', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       const ads = await res.json();
       const adsList = document.getElementById('ads-list');
       adsList.innerHTML = '';
@@ -119,10 +121,16 @@
       ads.forEach(ad => {
         const div = document.createElement('div');
         div.className = 'card';
+        
+        const isWatched = ad.watched;
+        const buttonHTML = isWatched 
+          ? `<button disabled style="background:#6c757d;">Déjà vue aujourd'hui ✅</button>`
+          : `<button id="btn-${ad.id}" onclick="watchAd(${ad.id}, '${ad.ad_url}', ${ad.duration_seconds})">Regarder l'annonce</button>`;
+
         div.innerHTML = `
           <h3>${ad.title}</h3>
           <p>Gain : <b>${parseFloat(ad.reward_amount).toFixed(4)} $</b> | Durée : ${ad.duration_seconds} sec</p>
-          <button id="btn-${ad.id}" onclick="watchAd(${ad.id}, '${ad.ad_url}', ${ad.duration_seconds})">Regarder l'annonce</button>
+          ${buttonHTML}
         `;
         adsList.appendChild(div);
       });
@@ -148,10 +156,12 @@
             },
             body: JSON.stringify({ adId })
           });
+          const data = await res.json();
           if (res.ok) {
             btn.innerText = "Gain crédité ! ✅";
             updateUI();
           } else {
+            alert(data.error);
             btn.innerText = "Erreur";
           }
         }
