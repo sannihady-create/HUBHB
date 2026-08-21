@@ -33,20 +33,7 @@ app.get('/api/seed-ads', async (req, res) => {
   }
 });
 
-// Route pour créer un utilisateur de test
-app.get('/api/create-test-user', async (req, res) => {
-  try {
-    await pool.query(
-      "INSERT INTO users (id, username, email, password_hash, balance) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO NOTHING",
-      ['1', 'testuser', 'test@example.com', 'hash_test', 0]
-    );
-    res.json({ message: 'Utilisateur de test créé avec succès !' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Route d'inscription
+// Route d'inscription avec ta gestion d'erreurs
 app.post('/api/register', async (req, res) => {
   const { username, email, password } = req.body;
   try {
@@ -55,38 +42,44 @@ app.post('/api/register', async (req, res) => {
       'INSERT INTO users (username, email, password_hash, balance) VALUES ($1, $2, $3, $4) RETURNING id, username, balance',
       [username, email, hashedPassword, 0]
     );
-    res.json({ message: 'Compte cree avec succes !', user: newUser.rows[0] });
+    res.json({ message: 'Compte créé avec succès !', user: newUser.rows[0] });
   } catch (err) {
-  console.error("Erreur inscription :", err);
+    console.error("Erreur inscription :", err);
 
-  if (err.code === "23505") {
-    return res.status(400).json({
-      error: "Email ou nom d'utilisateur déjà utilisé."
+    if (err.code === "23505") {
+      return res.status(400).json({
+        error: "Email ou nom d'utilisateur déjà utilisé."
+      });
+    }
+
+    res.status(500).json({
+      error: "Une erreur interne est survenue."
     });
   }
-
-  res.status(500).json({
-    error: "Une erreur interne est survenue."
-  });
-  }
+});
 
 // Route de connexion
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
   try {
     const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    if (result.rows.length === 0) return res.status(400).json({ error: 'Utilisateur introuvable.' });
+    if (result.rows.length === 0) {
+      return res.status(400).json({ error: 'Utilisateur introuvable.' });
+    }
 
     const user = result.rows[0];
     const validPassword = await bcrypt.compare(password, user.password_hash);
-    if (!validPassword) return res.status(400).json({ error: 'Mot de passe incorrect.' });
+    if (!validPassword) {
+      return res.status(400).json({ error: 'Mot de passe incorrect.' });
+    }
 
     res.json({
       message: 'Connexion réussie !',
       user: { id: user.id, username: user.username, balance: user.balance }
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Erreur connexion :", err);
+    res.status(500).json({ error: "Une erreur interne est survenue." });
   }
 });
 
@@ -105,7 +98,9 @@ app.post('/api/watch-ad', async (req, res) => {
   const { userId, adId } = req.body;
   try {
     const adQuery = await pool.query('SELECT reward_amount FROM ads WHERE id = $1', [adId]);
-    if (adQuery.rows.length === 0) return res.status(404).json({ error: 'Publicité introuvable' });
+    if (adQuery.rows.length === 0) {
+      return res.status(404).json({ error: 'Publicité introuvable' });
+    }
 
     const reward = adQuery.rows[0].reward_amount;
 
@@ -122,7 +117,9 @@ app.post('/api/watch-ad', async (req, res) => {
 app.get('/api/user/:id', async (req, res) => {
   try {
     const user = await pool.query('SELECT id, username, balance FROM users WHERE id = $1', [req.params.id]);
-    if (user.rows.length === 0) return res.status(404).json({ error: 'Utilisateur introuvable' });
+    if (user.rows.length === 0) {
+      return res.status(404).json({ error: 'Utilisateur introuvable' });
+    }
     res.json(user.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -131,5 +128,5 @@ app.get('/api/user/:id', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Serveur démarré sur le port ${PORT}`);
+  console.log(`Serveur HUBHB démarré sur le port ${PORT}`);
 });
