@@ -71,3 +71,4 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`Serveur HUBHB démarré sur le port ${PORT}`);
 });
+app.use(express.static(__dirname));
