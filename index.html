@@ -10,6 +10,7 @@
     .ad-card { background: white; padding: 15px; margin-bottom: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
     button { background-color: #28a745; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; }
     button:hover { background-color: #218838; }
+    button:disabled { background-color: #ccc; cursor: not-allowed; }
   </style>
 </head>
 <body>
@@ -18,6 +19,9 @@
   <div id="ads-container">Chargement des publicités...</div>
 
   <script>
+    // ID temporaire d'utilisateur pour les tests
+    const testUserId = '1';
+
     async function fetchAds() {
       try {
         const response = await fetch('/api/ads');
@@ -37,7 +41,9 @@
           adElement.innerHTML = `
             <h3>${ad.title}</h3>
             <p>Gain : <strong>${ad.reward_amount} $</strong> | Durée : ${ad.duration_seconds} sec</p>
-            <button onclick="watchAd('${ad.ad_url}')">Regarder l'annonce</button>
+            <button id="btn-${ad.id}" onclick="watchAd('${ad.id}', '${ad.ad_url}', ${ad.duration_seconds})">
+              Regarder l'annonce
+            </button>
           `;
           container.appendChild(adElement);
         });
@@ -46,8 +52,45 @@
       }
     }
 
-    function watchAd(adUrl) {
+    async function watchAd(adId, adUrl, duration) {
+      const btn = document.getElementById(`btn-${adId}`);
+      btn.disabled = true;
+
+      // Ouvrir la pub dans un nouvel onglet
       window.open(adUrl, '_blank');
+
+      let timer = duration;
+      btn.innerText = `Patienter... ${timer}s`;
+
+      const interval = setInterval(async () => {
+        timer--;
+        btn.innerText = `Patienter... ${timer}s`;
+
+        if (timer <= 0) {
+          clearInterval(interval);
+          btn.innerText = "Validation en cours...";
+
+          // Enregistrer le gain côté serveur
+          try {
+            const res = await fetch('/api/watch-ad', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId: testUserId, adId: adId })
+            });
+
+            const data = await res.json();
+            if (res.ok) {
+              btn.innerText = "Gain crédité ! ✅";
+              alert(`Bravo ! Vous avez gagné ${data.reward} $`);
+            } else {
+              btn.innerText = "Erreur";
+              alert(data.error || "Erreur de validation");
+            }
+          } catch (err) {
+            btn.innerText = "Erreur de connexion";
+          }
+        }
+      }, 1000);
     }
 
     fetchAds();
