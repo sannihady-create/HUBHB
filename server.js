@@ -14,7 +14,7 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// INITIALISATION AUTOMATIQUE DE LA BASE DE DONNÉES
+// INITIALISATION AUTOMATIQUE DE LA BASE DE DONNÉES ET CRÉATION DES PUBS
 async function initDatabase() {
   try {
     // 1. Table Utilisateurs
@@ -25,15 +25,6 @@ async function initDatabase() {
         email VARCHAR(255) UNIQUE NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
         balance NUMERIC DEFAULT 0
-      );
-    `);
-
-    //  2. Table Publicités
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS ads (
-        id SERIAL PRIMARY KEY,
-        title VARCHAR(255) NOT NULL,
-        reward_amount NUMERIC NOT NULL
       );
     `);
 
@@ -55,7 +46,19 @@ async function initDatabase() {
           [`Publicité Sponsorisée #${i}`, 25.00]
         );
       }
+      console.log('50 publicités insérées avec succès !');
     }
+
+    // 3. Table Vues de Pubs
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ad_views (
+        id SERIAL PRIMARY KEY,
+        user_id INT REFERENCES users(id),
+        ad_id INT REFERENCES ads(id),
+        reward_claimed NUMERIC,
+        viewed_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
 
     // 4. Table Retraits
     await pool.query(`
@@ -161,21 +164,10 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// ROUTE 50 PUBLICITÉS EN FCFA
+// ROUTE RÉCUPÉRATION DES PUBLICITÉS
 app.get('/api/ads', authenticateToken, async (req, res) => {
   const userId = req.user.id;
   try {
-    // Génération automatique si aucune pub n'existe
-    const countCheck = await pool.query('SELECT COUNT(*) FROM ads');
-    if (parseInt(countCheck.rows[0].count) === 0) {
-      for (let i = 1; i <= 50; i++) {
-        await pool.query(
-          'INSERT INTO ads (title, reward_amount) VALUES ($1, $2)',
-          [`Publicité Sponsorisée #${i}`, 25.00]
-        );
-      }
-    }
-
     const adsQuery = `
       SELECT a.*, 
         CASE WHEN COUNT(v.id) > 0 THEN true ELSE false END AS watched
@@ -263,4 +255,4 @@ app.post('/api/withdraw', authenticateToken, async (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Serveur HUBHB démarré sur le port ${PORT}`);
-}); 
+});
