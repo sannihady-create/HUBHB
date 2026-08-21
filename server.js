@@ -33,6 +33,16 @@ app.get('/api/create-test-user', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// Récupérer les informations de l'utilisateur (dont le solde)
+app.get('/api/user/:id', async (req, res) => {
+  try {
+    const user = await pool.query('SELECT id, username, balance FROM users WHERE id = $1', [req.params.id]);
+    if (user.rows.length === 0) return res.status(404).json({ error: 'Utilisateur introuvable' });
+    res.json(user.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 // Récupérer la liste des publicités actives
 app.get('/api/ads', async (req, res) => {
   try {
