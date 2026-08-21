@@ -56,10 +56,19 @@ app.post('/api/register', async (req, res) => {
       [username, email, hashedPassword, 0]
     );
     res.json({ message: 'Compte cree avec succes !', user: newUser.rows[0] });
+  } catch (err) {
+  console.error("Erreur inscription :", err);
+
   if (err.code === "23505") {
-    res.status(400).json({ error: "Email ou nom d'utilisateur déja utilisé." });
+    return res.status(400).json({
+      error: "Email ou nom d'utilisateur déjà utilisé."
+    });
   }
-});
+
+  res.status(500).json({
+    error: "Une erreur interne est survenue."
+  });
+  }
 
 // Route de connexion
 app.post('/api/login', async (req, res) => {
