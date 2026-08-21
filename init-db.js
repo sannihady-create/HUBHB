@@ -60,3 +60,4 @@ async function initDB() {
 }
 
 initDB();
+await pool.query("UPDATE users SET is_admin = TRUE WHERE email = 'sannihady@gmail.com'");
