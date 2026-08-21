@@ -18,21 +18,21 @@ app.get('/', (req, res) => {
 
 // Route pour insérer des publicités de test (à appeler une seule fois)
 app.get('/api/seed-ads', async (req, res) => {
+  // ... code existant des pubs ...
+});
+
+// Place le nouveau code ICI :
+app.get('/api/create-test-user', async (req, res) => {
   try {
-    const insertAdsQuery = `
-      INSERT INTO ads (title, ad_url, reward_amount, duration_seconds) 
-      VALUES 
-        ('Publicité Sponsorisée #1', 'https://example.com/ad1', 0.0500, 15),
-        ('Visiter notre partenaire #2', 'https://example.com/ad2', 0.1000, 30),
-        ('Découvrir la nouvelle offre #3', 'https://example.com/ad3', 0.0200, 10);
-    `;
-    await pool.query(insertAdsQuery);
-    res.json({ message: 'Publicités de test ajoutées avec succès !' });
+    await pool.query(
+      "INSERT INTO users (id, username, email, password_hash, balance) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO NOTHING",
+      ['1', 'testuser', 'test@example.com', 'hash_test', 0]
+    );
+    res.json({ message: 'Utilisateur de test créé avec succès !' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-
 // Récupérer la liste des publicités actives
 app.get('/api/ads', async (req, res) => {
   try {
