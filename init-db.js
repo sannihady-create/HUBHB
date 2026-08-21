@@ -7,7 +7,6 @@ const pool = new Pool({
 
 async function initDB() {
   try {
-    // 1. Créer la table si elle n'existe pas
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -15,7 +14,6 @@ async function initDB() {
         email VARCHAR(100) UNIQUE NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
         balance NUMERIC(10, 4) DEFAULT 0.0000,
-        is_admin BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -52,18 +50,7 @@ async function initDB() {
         used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
-
-    // 2. Ajouter la colonne is_admin si elle n'existe pas dans la table existante
-    await pool.query(`
-      ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE;
-    `);
-
-    // 3. Activer le statut administrateur pour ton compte
-    await pool.query(`
-      UPDATE users SET is_admin = TRUE WHERE email = 'sannihady@gmail.com';
-    `);
-
-    console.log("Base de données initialisée et mis à jour avec succès !");
+    console.log("Base de données initialisée avec succès !");
   } catch (err) {
     console.error("Erreur lors de l'initialisation de la DB :", err);
   } finally {
