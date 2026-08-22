@@ -44,24 +44,25 @@ async function initDatabase() {
             );
         `);
 
-        // Vérifier si la table des pubs est vide pour insérer un premier lot stable
         const res = await pool.query('SELECT COUNT(*) FROM ads');
         const count = parseInt(res.rows[0].count);
 
         if (count === 0) {
-            console.log('Création des premières publicités...');
-            for (let i = 1; i <= 20; i++) {
-                await pool.query(
-                    'INSERT INTO ads (title, reward_amount, duration_seconds, active) VALUES ($1, $2, $3, $4)',
-                    [`Sponsor Local #${i}`, 2.00, 30, true]
-                );
-            }
-            console.log('Publicités créées avec succès !');
+            console.log('Création des pubs de test...');
+            await pool.query(`
+                INSERT INTO ads (title, reward_amount, duration_seconds, active) VALUES 
+                ('Sponsor Local #1', 2.00, 30, true),
+                ('Sponsor Local #2', 2.00, 30, true),
+                ('Sponsor Local #3', 2.00, 30, true),
+                ('Sponsor Local #4', 2.00, 30, true),
+                ('Sponsor Local #5', 2.00, 30, true);
+            `);
+            console.log('Pubs créées avec succès !');
         }
 
-        console.log('Base de données initialisée avec succès.');
+        console.log('Base de données initialisée.');
     } catch (err) {
-        console.error('Erreur lors de l\'initialisation de la DB :', err);
+        console.error('Erreur DB :', err);
     }
 }
 
@@ -70,10 +71,10 @@ initDatabase();
 function authenticateToken(req, res, next) {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
-    if (!token) return res.status(401).json({ error: 'Accès refusé, token manquant.' });
+    if (!token) return res.status(401).json({ error: 'Accès refusé.' });
 
     jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) return res.status(403).json({ error: 'Token invalide ou expiré.' });
+        if (err) return res.status(403).json({ error: 'Token invalide.' });
         req.user = user;
         next();
     });
@@ -82,21 +83,14 @@ function authenticateToken(req, res, next) {
 app.post('/api/register', async (req, res) => {
     try {
         const { username, email, password } = req.body;
-        if (!username || !email || !password) {
-            return res.status(400).json({ error: 'Tous les champs sont obligatoires.' });
-        }
         const hashedPassword = await bcrypt.hash(password, 10);
         const newUser = await pool.query(
             'INSERT INTO users (username, email, password) VALUES ($1, $2, $3) RETURNING id, username, email',
             [username, email, hashedPassword]
         );
-        res.status(201).json({ message: 'Compte créé avec succès', user: newUser.rows[0] });
+        res.status(201).json({ message: 'Succès', user: newUser.rows[0] });
     } catch (err) {
-        if (err.code === '23505') {
-            res.status(400).json({ error: 'Cet email ou nom d\'utilisateur est déjà utilisé.' });
-        } else {
-            res.status(500).json({ error: 'Erreur serveur interne.' });
-        }
+        res.status(500).json({ error: 'Erreur serveur.' });
     }
 });
 
@@ -104,18 +98,14 @@ app.post('/api/login', async (req, res) => {
     try {
         const { email, password } = req.body;
         const userResult = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-        if (userResult.rows.length === 0) {
-            return res.status(400).json({ error: 'Utilisateur non trouvé.' });
-        }
+        if (userResult.rows.length === 0) return res.status(400).json({ error: 'Utilisateur introuvable.' });
         const user = userResult.rows[0];
         const validPassword = await bcrypt.compare(password, user.password);
-        if (!validPassword) {
-            return res.status(400).json({ error: 'Mot de passe incorrect.' });
-        }
+        if (!validPassword) return res.status(400).json({ error: 'Mot de passe incorrect.' });
         const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
-        res.json({ token, user: { id: user.id, username: user.username, email: user.email } });
+        res.json({ token, user: { id: user.id, username: user.username } });
     } catch (err) {
-        res.status(500).json({ error: 'Erreur serveur lors de la connexion.' });
+        res.status(500).json({ error: 'Erreur serveur.' });
     }
 });
 
@@ -131,7 +121,7 @@ app.get('/api/ads', authenticateToken, async (req, res) => {
         `, [userId]);
         res.json(adsResult.rows);
     } catch (err) {
-        res.status(500).json({ error: 'Erreur lors de la récupération des publicités.' });
+        res.status(500).json({ error: 'Erreur.' });
     }
 });
 
@@ -139,16 +129,10 @@ app.post('/api/watch-ad', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.id;
         const { adId } = req.body;
-
-        const checkView = await pool.query('SELECT * FROM ad_views WHERE user_id = $1 AND ad_id = $2', [userId, adId]);
-        if (checkView.rows.length > 0) {
-            return res.status(400).json({ error: 'Vous avez déjà regardé cette publicité.' });
-        }
-
         await pool.query('INSERT INTO ad_views (user_id, ad_id) VALUES ($1, $2)', [userId, adId]);
-        res.json({ success: true, message: 'Publicité validée, 2 FCFA ajoutés !' });
+        res.json({ success: true, message: 'Validé !' });
     } catch (err) {
-        res.status(500).json({ error: 'Erreur lors de la validation de la publicité.' });
+        res.status(500).json({ error: 'Erreur.' });
     }
 });
 
