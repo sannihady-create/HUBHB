@@ -1,0 +1,73 @@
+const express = require('express');
+const { Pool } = require('pg');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const path = require('path');
+
+const app = express();
+const PORT = process.env.PORT || 10000;
+const JWT_SECRET = process.env.JWT_SECRET || 'hubhb_secure_secret_key_2026';
+
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+});
+
+app.use(express.json());
+app.use(express.static(path.join(__dirname)));
+
+// Route de test simple pour vérifier que le serveur répond
+app.get('/api/health', (req, res) => {
+    res.json({ status: 'OK', message: 'Le serveur HUBHB tourne parfaitement !' });
+});
+
+// Authentification : Inscription
+app.post('/api/register', async (req, res) => {
+    try {
+        const { username, email, password } = req.body;
+        if (!username || !email || !password) {
+            return res.status(400).json({ error: 'Tous les champs sont obligatoires.' });
+        }
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const newUser = await pool.query(
+            'INSERT INTO users (username, email, password) VALUES ($1, $2, $3) RETURNING id, username, email',
+            [username, email, hashedPassword]
+        );
+        res.status(201).json({ message: 'Compte créé avec succès', user: newUser.rows[0] });
+    } catch (err) {
+        if (err.code === '23505') {
+            res.status(400).json({ error: 'Cet email ou nom d\'utilisateur est déjà utilisé.' });
+        } else {
+            res.status(500).json({ error: 'Erreur serveur interne.' });
+        }
+    }
+});
+
+// Authentification : Connexion
+app.post('/api/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        const userResult = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+        if (userResult.rows.length === 0) {
+            return res.status(400).json({ error: 'Utilisateur non trouvé.' });
+        }
+        const user = userResult.rows[0];
+        const validPassword = await bcrypt.compare(password, user.password);
+        if (!validPassword) {
+            return res.status(400).json({ error: 'Mot de passe incorrect.' });
+        }
+        const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
+        res.json({ token, user: { id: user.id, username: user.username, email: user.email } });
+    } catch (err) {
+        res.status(500).json({ error: 'Erreur serveur lors de la connexion.' });
+    }
+});
+
+// Redirection vers le frontend
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+app.listen(PORT, () => {
+    console.log(`Serveur HUBHB actif sur le port ${PORT}`);
+});
