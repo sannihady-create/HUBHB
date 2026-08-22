@@ -44,20 +44,19 @@ async function initDatabase() {
             );
         `);
 
+        // Vérifier si la table des pubs est vide pour insérer un premier lot stable
         const res = await pool.query('SELECT COUNT(*) FROM ads');
         const count = parseInt(res.rows[0].count);
 
-        if (count < 1000) {
-            console.log('Génération des 1000 publicités...');
-            await pool.query('DELETE FROM ads');
-            
-            const queryValues = [];
-            for (let i = 1; i <= 1000; i++) {
-                queryValues.push(`('Sponsor Local #${i}', 2.00, 30, true)`);
+        if (count === 0) {
+            console.log('Création des premières publicités...');
+            for (let i = 1; i <= 20; i++) {
+                await pool.query(
+                    'INSERT INTO ads (title, reward_amount, duration_seconds, active) VALUES ($1, $2, $3, $4)',
+                    [`Sponsor Local #${i}`, 2.00, 30, true]
+                );
             }
-            
-            await pool.query(`INSERT INTO ads (title, reward_amount, duration_seconds, active) VALUES ${queryValues.join(',')}`);
-            console.log('1000 publicités générées avec succès !');
+            console.log('Publicités créées avec succès !');
         }
 
         console.log('Base de données initialisée avec succès.');
