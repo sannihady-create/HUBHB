@@ -196,7 +196,8 @@
     </main>
 
     <script>
-        const API_URL = '';
+        // URL de ton backend sur Render
+        const API_URL = 'https://hubhb-2.onrender.com';
 
         function showAlert(elementId, message, type) {
             const el = document.getElementById(elementId);
@@ -237,6 +238,7 @@
                     showAlert('register-alert', data.error || 'Erreur lors de l\'inscription', 'error');
                 }
             } catch (err) {
+                console.error(err);
                 showAlert('register-alert', 'Erreur de connexion au serveur.', 'error');
             }
         });
@@ -262,6 +264,7 @@
                     showAlert('login-alert', data.error || 'Identifiants incorrects', 'error');
                 }
             } catch (err) {
+                console.error(err);
                 showAlert('login-alert', 'Erreur de connexion au serveur.', 'error');
             }
         });
@@ -342,4 +345,4 @@
         };
     </script>
 </body>
-                      </html>
+</html>
