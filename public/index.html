@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HUBHB - Gagner de l'argent en ligne en regardant des pubs</title>
+    <style>
+        :root {
+            --primary: #10b981;
+            --primary-dark: #059669;
+            --bg-color: #f3f4f6;
+            --card-bg: #ffffff;
+            --text-color: #1f2937;
+        }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        header {
+            background-color: var(--card-bg);
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--primary);
+        }
+        main {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem 1rem;
+        }
+        .card {
+            background: var(--card-bg);
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            width: 100%;
+            max-width: 400px;
+        }
+        h2 {
+            margin-bottom: 1.5rem;
+            text-align: center;
+            color: var(--text-color);
+        }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+        input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+        button {
+            width: 100%;
+            padding: 0.75rem;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 1rem;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background-color: var(--primary-dark);
+        }
+        .switch-auth {
+            text-align: center;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+        }
+        .switch-auth a {
+            color: var(--primary);
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .hidden {
+            display: none;
+        }
+        .dashboard {
+            max-width: 800px;
+            width: 100%;
+        }
+        .ad-list {
+            margin-top: 1.5rem;
+            display: grid;
+            gap: 1rem;
+        }
+        .ad-item {
+            background: white;
+            padding: 1rem;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        }
+        .alert {
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+        .alert-error { background-color: #fee2e2; color: #991b1b; }
+        .alert-success { background-color: #d1fae5; color: #065f46; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo">HUBHB</div>
+        <div id="user-info" class="hidden">
+            <span id="welcome-user"></span> | <a href="#" onclick="logout()" style="color: #ef4444; text-decoration: none;">Déconnexion</a>
+        </div>
+    </header>
+
+    <main>
+        <!-- Formulaire de Connexion -->
+        <div id="login-container" class="card">
+            <h2>Connexion à HUBHB</h2>
+            <div id="login-alert" class="alert hidden"></div>
+            <form id="login-form">
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="login-email" required>
+                </div>
+                <div class="form-group">
+                    <label>Mot de passe</label>
+                    <input type="password" id="login-password" required>
+                </div>
+                <button type="submit">Se connecter</button>
+            </form>
+            <div class="switch-auth">
+                Pas de compte ? <a onclick="showRegister()">S'inscrire</a>
+            </div>
+        </div>
+
+        <!-- Formulaire d'Inscription -->
+        <div id="register-container" class="card hidden">
+            <h2>Inscription sur HUBHB</h2>
+            <div id="register-alert" class="alert hidden"></div>
+            <form id="register-form">
+                <div class="form-group">
+                    <label>Nom d'utilisateur</label>
+                    <input type="text" id="reg-username" required>
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="reg-email" required>
+                </div>
+                <div class="form-group">
+                    <label>Mot de passe</label>
+                    <input type="password" id="reg-password" required>
+                </div>
+                <button type="submit">Créer mon compte</button>
+            </form>
+            <div class="switch-auth">
+                Déjà un compte ? <a onclick="showLogin()">Se connecter</a>
+            </div>
+        </div>
+
+        <!-- Tableau de Bord (Publicités) -->
+        <div id="dashboard-container" class="dashboard hidden">
+            <h2>Tableau de bord - Gagner des FCFA</h2>
+            <p>Regardez les publicités disponibles ci-dessous pour gagner de l'argent :</p>
+            <div id="ads-list" class="ad-list">
+                <!-- Les pubs seront injectées ici -->
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API_URL = '';
+
+        function showAlert(elementId, message, type) {
+            const el = document.getElementById(elementId);
+            el.textContent = message;
+            el.className = `alert alert-${type}`;
+            el.classList.remove('hidden');
+            setTimeout(() => el.classList.add('hidden'), 4000);
+        }
+
+        function showRegister() {
+            document.getElementById('login-container').classList.add('hidden');
+            document.getElementById('register-container').classList.remove('hidden');
+        }
+
+        function showLogin() {
+            document.getElementById('register-container').classList.add('hidden');
+            document.getElementById('login-container').classList.remove('hidden');
+        }
+
+        // Inscription
+        document.getElementById('register-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('reg-username').value;
+            const email = document.getElementById('reg-email').value;
+            const password = document.getElementById('reg-password').value;
+
+            try {
+                const res = await fetch(`${API_URL}/api/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email, password })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showAlert('register-alert', 'Compte créé avec succès ! Connectez-vous.', 'success');
+                    setTimeout(showLogin, 1500);
+                } else {
+                    showAlert('register-alert', data.error || 'Erreur lors de l\'inscription', 'error');
+                }
+            } catch (err) {
+                showAlert('register-alert', 'Erreur de connexion au serveur.', 'error');
+            }
+        });
+
+        // Connexion
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+
+            try {
+                const res = await fetch(`${API_URL}/api/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('username', data.user.username);
+                    loadDashboard();
+                } else {
+                    showAlert('login-alert', data.error || 'Identifiants incorrects', 'error');
+                }
+            } catch (err) {
+                showAlert('login-alert', 'Erreur de connexion au serveur.', 'error');
+            }
+        });
+
+        function loadDashboard() {
+            document.getElementById('login-container').classList.add('hidden');
+            document.getElementById('register-container').classList.add('hidden');
+            document.getElementById('dashboard-container').classList.remove('hidden');
+            document.getElementById('user-info').classList.remove('hidden');
+            document.getElementById('welcome-user').textContent = `Bonjour, ${localStorage.getItem('username')}`;
+            fetchAds();
+        }
+
+        async function fetchAds() {
+            const token = localStorage.getItem('token');
+            try {
+                const res = await fetch(`${API_URL}/api/ads`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.status === 401 || res.status === 403) {
+                    logout();
+                    return;
+                }
+                const ads = await res.json();
+                const list = document.getElementById('ads-list');
+                list.innerHTML = '';
+                ads.forEach(ad => {
+                    list.innerHTML += `
+                        <div class="ad-item">
+                            <div>
+                                <strong>${ad.title}</strong><br>
+                                <small>Récompense : ${ad.reward_amount} FCFA (${ad.duration_seconds}s)</small>
+                            </div>
+                            <button style="width: auto; padding: 0.5rem 1rem; margin:0;" ${ad.watched ? 'disabled style="background:#9ca3af;"' : ''} onclick="watchAd(${ad.id})">
+                                ${ad.watched ? 'Déjà vu' : 'Regarder'}
+                            </button>
+                        </div>
+                    `;
+                });
+            } catch (err) {
+                console.error('Erreur chargement pubs', err);
+            }
+        }
+
+        async function watchAd(adId) {
+            const token = localStorage.getItem('token');
+            try {
+                const res = await fetch(`${API_URL}/api/watch-ad`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}` 
+                    },
+                    body: JSON.stringify({ adId })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    alert(data.message);
+                    fetchAds();
+                } else {
+                    alert(data.error || 'Erreur');
+                }
+            } catch (err) {
+                alert('Erreur réseau');
+            }
+        }
+
+        function logout() {
+            localStorage.clear();
+            location.reload();
+        }
+
+        // Vérifier si déjà connecté au chargement
+        window.onload = () => {
+            if (localStorage.getItem('token')) {
+                loadDashboard();
+            }
+        };
+    </script>
+</body>
+                      </html>
